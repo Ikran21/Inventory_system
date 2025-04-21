@@ -1,29 +1,60 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 
 export default function Products() {
-  const [products, setProducts] = useState([
-    { name: 'Laptop', sku: 'LP001', quantity: 10 },
-    { name: 'Keyboard', sku: 'KB002', quantity: 0 },
-  ]);
-
+  const [products, setProducts] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
-    quantity: '',
+    description: '',
+    quantity_in_stock: '',
   });
+
+  const token = localStorage.getItem('token');
+  const API_URL = 'http://localhost:5000/api/products';
+
+  useEffect(() => {
+    fetch(API_URL, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => setProducts(data.products || []))
+      .catch((err) => console.error('Error fetching products:', err));
+  }, [token]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleAddProduct = (e) => {
+  const handleAddProduct = async (e) => {
     e.preventDefault();
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(formData),
+      });
+      const newProduct = await res.json();
+      setProducts([...products, newProduct]);
+      setFormData({ name: '', sku: '', description: '', quantity_in_stock: '' });
+    } catch (err) {
+      console.error('Error adding product:', err);
+    }
+  };
 
-    const { name, sku, quantity } = formData;
-    if (!name || !sku || quantity === '') return;
-
-    setProducts([...products, { name, sku, quantity: parseInt(quantity) }]);
-    setFormData({ name: '', sku: '', quantity: '' });
+  const handleDelete = async (id) => {
+    try {
+      await fetch(`${API_URL}/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setProducts(products.filter((p) => p.product_id !== id));
+    } catch (err) {
+      console.error('Error deleting product:', err);
+    }
   };
 
   return (
@@ -40,11 +71,15 @@ export default function Products() {
           <input name="sku" value={formData.sku} onChange={handleChange} />
         </div>
         <div className="form-group">
+          <label>Description</label>
+          <input name="description" value={formData.description} onChange={handleChange} />
+        </div>
+        <div className="form-group">
           <label>Quantity</label>
           <input
-            name="quantity"
+            name="quantity_in_stock"
             type="number"
-            value={formData.quantity}
+            value={formData.quantity_in_stock}
             onChange={handleChange}
           />
         </div>
@@ -58,16 +93,32 @@ export default function Products() {
           <tr>
             <th>Name</th>
             <th>SKU</th>
+            <th>Description</th>
             <th>Quantity</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {products.map((p, i) => (
-            <tr key={i}>
+          {products.map((p) => (
+            <tr key={p.product_id}>
               <td>{p.name}</td>
               <td>{p.sku}</td>
-              <td style={{ color: p.quantity === 0 ? 'red' : 'black' }}>
-                {p.quantity}
+              <td>{p.description}</td>
+              <td>{p.quantity_in_stock}</td>
+              <td>
+                <button
+                  onClick={() => handleDelete(p.product_id)}
+                  style={{
+                    backgroundColor: '#e74c3c',
+                    color: 'white',
+                    border: 'none',
+                    padding: '6px 12px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Delete
+                </button>
               </td>
             </tr>
           ))}

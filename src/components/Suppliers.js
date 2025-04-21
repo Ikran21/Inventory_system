@@ -1,26 +1,70 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function Suppliers() {
-  const [suppliers, setSuppliers] = useState([
-    { name: 'TechSource', contact: 'contact@techsource.com', score: 4.5 },
-    { name: 'QuickParts', contact: 'sales@quickparts.io', score: 3.9 },
-  ]);
-
+  const [suppliers, setSuppliers] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
-    contact: '',
-    score: '',
+    contact_info: '',
+    reliability_score: '',
   });
+
+  const API_URL = 'http://localhost:5000/api/suppliers';
+  const token = localStorage.getItem('token');
+
+  // Fetch suppliers only created by the current user
+  useEffect(() => {
+    fetch(API_URL, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log('Fetched suppliers:', data);
+        setSuppliers(data);
+      })
+      .catch((err) => console.error('Error fetching suppliers:', err));
+  }, []);
 
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const handleAddSupplier = (e) => {
+  const handleAddSupplier = async (e) => {
     e.preventDefault();
-    const { name, contact, score } = formData;
-    if (!name || !contact || score === '') return;
-    setSuppliers([...suppliers, { name, contact, score: parseFloat(score) }]);
-    setFormData({ name: '', contact: '', score: '' });
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to add supplier');
+      }
+
+      const newSupplier = await res.json();
+      setSuppliers([...suppliers, newSupplier]);
+      setFormData({ name: '', contact_info: '', reliability_score: '' });
+    } catch (err) {
+      console.error('Error adding supplier:', err);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await fetch(`${API_URL}/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setSuppliers(suppliers.filter((s) => s.supplier_id !== id));
+    } catch (err) {
+      console.error('Error deleting supplier:', err);
+    }
   };
 
   return (
@@ -29,22 +73,22 @@ export default function Suppliers() {
 
       <form className="form" onSubmit={handleAddSupplier}>
         <div className="form-group">
-          <label>Supplier Name</label>
+          <label>Name</label>
           <input name="name" value={formData.name} onChange={handleChange} />
         </div>
         <div className="form-group">
-          <label>Contact Email</label>
-          <input name="contact" value={formData.contact} onChange={handleChange} />
+          <label>Contact Info</label>
+          <input name="contact_info" value={formData.contact_info} onChange={handleChange} />
         </div>
         <div className="form-group">
           <label>Reliability Score</label>
           <input
-            name="score"
+            name="reliability_score"
             type="number"
             step="0.1"
             min="0"
             max="5"
-            value={formData.score}
+            value={formData.reliability_score}
             onChange={handleChange}
           />
         </div>
@@ -59,14 +103,30 @@ export default function Suppliers() {
             <th>Name</th>
             <th>Contact</th>
             <th>Reliability</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {suppliers.map((s, i) => (
-            <tr key={i}>
+          {suppliers.map((s) => (
+            <tr key={s.supplier_id}>
               <td>{s.name}</td>
-              <td>{s.contact}</td>
-              <td>{s.score}/5</td>
+              <td>{s.contact_info}</td>
+              <td>{s.reliability_score}</td>
+              <td>
+                <button
+                  onClick={() => handleDelete(s.supplier_id)}
+                  style={{
+                    backgroundColor: '#e74c3c',
+                    color: 'white',
+                    border: 'none',
+                    padding: '6px 12px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Delete
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>

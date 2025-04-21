@@ -1,30 +1,85 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function PendingInventory() {
-  const [pendingItems, setPendingItems] = useState([
-    { product: 'Laptop', quantity: 10, expected: '2025-04-10' },
-    { product: 'Keyboard', quantity: 5, expected: '2025-04-15' },
-  ]);
-
+  const [pendingItems, setPendingItems] = useState([]);
   const [formData, setFormData] = useState({
-    product: '',
-    quantity: '',
-    expected: '',
+    order_id: '',
+    product_id: '',
+    quantity_ordered: '',
+    quantity_received: '',
   });
+  const [orders, setOrders] = useState([]);
+  const [products, setProducts] = useState([]);
+
+  const API_URL = 'http://localhost:5000/api/pending';
+  const token = localStorage.getItem('token');
+
+  useEffect(() => {
+    fetch(API_URL, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => setPendingItems(data))
+      .catch((err) => console.error('Error fetching pending inventory:', err));
+
+    fetch('http://localhost:5000/api/orders', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => setOrders(data))
+      .catch((err) => console.error('Error fetching orders:', err));
+
+    fetch('http://localhost:5000/api/products', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setProducts(data);
+        } else if (Array.isArray(data.products)) {
+          setProducts(data.products);
+        } else {
+          console.error('Unexpected product response:', data);
+        }
+      })
+      .catch((err) => console.error('Error fetching products:', err));
+  }, [token]);
 
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const handleAddPending = (e) => {
+  const handleAddPending = async (e) => {
     e.preventDefault();
-    const { product, quantity, expected } = formData;
-    if (!product || !quantity || !expected) return;
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(formData),
+      });
 
-    setPendingItems([
-      ...pendingItems,
-      { product, quantity: parseInt(quantity), expected },
-    ]);
-    setFormData({ product: '', quantity: '', expected: '' });
+      if (!res.ok) throw new Error('Failed to add pending item');
+
+      const newItem = await res.json();
+      setPendingItems([...pendingItems, newItem]);
+      setFormData({ order_id: '', product_id: '', quantity_ordered: '', quantity_received: '' });
+    } catch (err) {
+      console.error('Error adding pending item:', err);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await fetch(`${API_URL}/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setPendingItems(pendingItems.filter((item) => item.pending_id !== id));
+    } catch (err) {
+      console.error('Error deleting pending item:', err);
+    }
   };
 
   return (
@@ -33,28 +88,42 @@ export default function PendingInventory() {
 
       <form className="form" onSubmit={handleAddPending}>
         <div className="form-group">
+          <label>Order</label>
+          <select name="order_id" value={formData.order_id} onChange={handleChange}>
+            <option value="">Select Order</option>
+            {orders.map((o) => (
+              <option key={o.order_id} value={o.order_id}>
+                Order #{o.order_id}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
           <label>Product</label>
-          <input
-            name="product"
-            value={formData.product}
-            onChange={handleChange}
-          />
+          <select name="product_id" value={formData.product_id} onChange={handleChange}>
+            <option value="">Select Product</option>
+            {products.map((p) => (
+              <option key={p.product_id} value={p.product_id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="form-group">
           <label>Quantity Ordered</label>
           <input
             type="number"
-            name="quantity"
-            value={formData.quantity}
+            name="quantity_ordered"
+            value={formData.quantity_ordered}
             onChange={handleChange}
           />
         </div>
         <div className="form-group">
-          <label>Expected Arrival Date</label>
+          <label>Quantity Received</label>
           <input
-            type="date"
-            name="expected"
-            value={formData.expected}
+            type="number"
+            name="quantity_received"
+            value={formData.quantity_received}
             onChange={handleChange}
           />
         </div>
@@ -66,17 +135,35 @@ export default function PendingInventory() {
       <table>
         <thead>
           <tr>
+            <th>Order</th>
             <th>Product</th>
-            <th>Quantity</th>
-            <th>Expected Arrival</th>
+            <th>Ordered</th>
+            <th>Received</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {pendingItems.map((item, i) => (
-            <tr key={i}>
-              <td>{item.product}</td>
-              <td>{item.quantity}</td>
-              <td>{item.expected}</td>
+          {pendingItems.map((item) => (
+            <tr key={item.pending_id}>
+              <td>{item.order_id}</td>
+              <td>{item.product_id}</td>
+              <td>{item.quantity_ordered}</td>
+              <td>{item.quantity_received}</td>
+              <td>
+                <button
+                  onClick={() => handleDelete(item.pending_id)}
+                  style={{
+                    backgroundColor: '#e74c3c',
+                    color: 'white',
+                    border: 'none',
+                    padding: '6px 12px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Delete
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
